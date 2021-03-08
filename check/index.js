@@ -1,61 +1,48 @@
 import "babel-polyfill"
-import connect from "./model/connect"
-import route from "./controller/mergeroute"
-const bodyPraser=require("body-parser")
-const path = require("path")
-connect.connect()
-const session=require("express-session")
-const cookieparser=require("cookie-parser")
+import bodyParser from "body-parser"
+import connection from "./schema/connect"
+
+import { post } from './schema/post';
+import { comment } from './schema/comment';
+import  mongoose  from "mongoose";
+connection.connect()
 const server=require("express")
 const app=server()
-// session
-app.use(cookieparser())
-app.use(session({
-    secret:"abc",
-    resave:true,
-    saveUninitialized:true,
-    cookie:{maxAge:3600000}
-}))
+app.use(bodyParser.json())
 
-
-// 
-// use of body praser
-app.use(bodyPraser.json())
-app.use(bodyPraser.urlencoded({extended:true}))
-
-// setup viwe engine hbs
-app.set("view engine","hbs")
-app.set("views",path.join(__dirname,"view"))
-app.use(server.static(path.join(__dirname,"view/upload")))
-app.use(server.static(path.join(__dirname,"view/css")))
-
-
-
-
-// route comming 
-app.use(route.route)
-
-
-
-// page not Found
-app.use((req,res,next)=>{
-    const error=new Error("Page Not found")
-    error.status=404
-    next(error)
-})
-
-
-// throw any error in data base
-app.use((err,req,resp,next)=>{
-    if(err)return resp.json({
-        msg:err.message
+app.post('/post',async(req,resp)=>{
+    console.log(req.body)
+    let blog=new post({
+        ...req.body
     })
-    next()
+    await blog.save()
+    return resp.json({
+        blog:blog
+    })
+
 })
-// health check
-app.get('/',(req,resp)=>{
-    resp.send("all good")
+app.post("/:postID/comment",async(req,resp)=>{
+    let postId=mongoose.Types.ObjectId(req.params.postID)
+    const comments=new comment({
+        ...req.body,
+        postID:postId
+        })
+    await comments.save()
+    let blogFind=await post.find({_id:postId})
+    blogFind[0].comment.push(comments._id)
+    await blogFind[0].save()
+    resp.json({
+        blogFind:blogFind
+    })
 })
-app.listen(process.env.port||2000,()=>{
-    console.log("listing at port ",process.env.port||2000)
+
+app.get("/:postID/read",async(req,resp)=>{
+    let postId=mongoose.Types.ObjectId(req.params.postID)
+    let blogFind=await post.find({_id:postId}).populate("comment")
+    resp.json({
+        blogFind:blogFind
+    })
 })
+
+
+app.listen(2000)
